@@ -1,5 +1,5 @@
 ThisBuild / organization := "com.repcheck"
-ThisBuild / version      := "0.1.0"
+ThisBuild / version      := "0.2.0"
 ThisBuild / scalaVersion := "2.12.19" // sbt 1.x plugins MUST be Scala 2.12
 
 ThisBuild / semanticdbEnabled := true
@@ -10,6 +10,14 @@ lazy val root = (project in file("."))
   .settings(
     name      := "sbt-exception-uniqueness",
     sbtPlugin := true,
+    libraryDependencies ++= Seq(
+      "org.scalameta" %% "scalameta" % "4.9.9"
+    ),
+    scriptedLaunchOpts := {
+      scriptedLaunchOpts.value ++
+        Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
+    },
+    scriptedBufferLog := false,
     scalacOptions ++= Seq(
       "-deprecation",
       "-feature",

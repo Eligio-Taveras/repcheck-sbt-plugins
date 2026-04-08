@@ -40,7 +40,27 @@ object ExceptionUniquenessCheck {
     testClasses: File,
     fullClasspath: Seq[File],
     projectRootPackages: Seq[String],
+    sourceDirectories: Seq[File],
   ): Unit = {
+    val declaredSimpleNames =
+      checkDeclarationUniqueness(compileClasses, testClasses, fullClasspath, projectRootPackages)
+    ThrowSiteUniquenessCheck.run(sourceDirectories, declaredSimpleNames, projectRootPackages)
+    println("check-exception-uniqueness: declarations OK, throw sites OK.")
+  }
+
+  /**
+   * Run only the declaration-name uniqueness pass and return the set of simple names of project-declared Throwable
+   * subclasses. Used by [[run]] to feed the throw-site scan, and exposed as its own method so callers can compose the
+   * two passes differently if needed.
+   *
+   * Fails with `sys.error` if duplicates are found.
+   */
+  def checkDeclarationUniqueness(
+    compileClasses: File,
+    testClasses: File,
+    fullClasspath: Seq[File],
+    projectRootPackages: Seq[String],
+  ): Set[String] = {
     if (projectRootPackages.isEmpty) {
       sys.error(
         "check-exception-uniqueness: projectRootPackages must be non-empty. " +
@@ -55,7 +75,7 @@ object ExceptionUniquenessCheck {
       println(
         "check-exception-uniqueness: no compiled class directories found; nothing to scan."
       )
-      ()
+      Set.empty[String]
     } else {
       val classpathUrls: Array[URL] =
         (scanRoots ++ fullClasspath).distinct.map(_.toURI.toURL).toArray
@@ -120,7 +140,7 @@ object ExceptionUniquenessCheck {
           println(
             s"check-exception-uniqueness: ${found.size} Throwable subclass(es) scanned under [$rootsDisplay], all unique. OK."
           )
-          ()
+          grouped.keySet
         } else {
           val message = new StringBuilder()
           message.append(
