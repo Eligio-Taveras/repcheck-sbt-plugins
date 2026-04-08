@@ -14,6 +14,12 @@ object ExceptionUniquenessPlugin extends AutoPlugin {
         "Root packages (allowlist) to scan for Throwable subclasses. Required; empty fails fast."
       )
 
+    val exceptionUniquenessIgnoreParseErrors =
+      settingKey[Seq[String]](
+        "Substring patterns identifying source files whose parse errors should be tolerated " +
+          "(the file is skipped instead of failing the task). Empty by default — parse errors fail the build."
+      )
+
     val checkExceptionUniqueness =
       taskKey[Unit](
         "Fail if two Throwable subclasses under the project's root packages share a simple name."
@@ -24,7 +30,8 @@ object ExceptionUniquenessPlugin extends AutoPlugin {
   import autoImport._
 
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
-    exceptionUniquenessRootPackages := Seq.empty,
+    exceptionUniquenessRootPackages      := Seq.empty,
+    exceptionUniquenessIgnoreParseErrors := Seq.empty,
     checkExceptionUniqueness := Def
       .task {
         ExceptionUniquenessCheck.run(
@@ -33,6 +40,7 @@ object ExceptionUniquenessPlugin extends AutoPlugin {
           (Test / fullClasspath).value.files,
           exceptionUniquenessRootPackages.value,
           (Compile / unmanagedSourceDirectories).value ++ (Test / unmanagedSourceDirectories).value,
+          exceptionUniquenessIgnoreParseErrors.value,
         )
       }
       .dependsOn(Compile / compile, Test / compile)

@@ -1,0 +1,5 @@
+# Negative: two throw sites of the same exception inside a Scala 3 enum file
+# must be detected. Before v0.4.0 this passed (parser silently skipped the
+# enum file); after v0.4.0 the Scala3 dialect parses it and the duplicate
+# throw sites are correctly reported.
+-> checkExceptionUniqueness

@@ -44,11 +44,15 @@ object ThrowSiteUniquenessCheck {
    *   is in this set are counted.
    * @param projectRootPackages
    *   the allowlisted dotted prefixes, used only for diagnostics in the failure message.
+   * @param ignoreParseErrors
+   *   substring patterns identifying source files whose parse errors should be tolerated (the file is skipped instead
+   *   of failing the task). Empty by default — parse errors fail the build.
    */
   def run(
     sourceDirectories: Seq[File],
     projectExceptionSimpleNames: Set[String],
     projectRootPackages: Seq[String],
+    ignoreParseErrors: Seq[String] = Seq.empty,
   ): Unit =
     if (projectExceptionSimpleNames.isEmpty) {
       println(
@@ -65,6 +69,8 @@ object ThrowSiteUniquenessCheck {
       } else {
         // (simpleName, filePath, lineNumber)
         val throwSites = new ListBuffer[(String, String, Int)]()
+        // (file, errorMessage) for files that failed to parse
+        val parseFailures = new ListBuffer[(File, String)]()
 
         def record(simpleName: String, file: File, line: Int): Unit = {
           throwSites += ((simpleName, file.getAbsolutePath, line))
@@ -73,7 +79,7 @@ object ThrowSiteUniquenessCheck {
 
         scalaFiles.foreach { file =>
           parseFile(file) match {
-            case Some(tree) =>
+            case Right(tree) =>
               tree.traverse {
                 case t @ Term.Throw(Term.New(init)) =>
                   extractSimpleName(init.tpe).foreach { simpleName =>
@@ -90,8 +96,57 @@ object ThrowSiteUniquenessCheck {
                     case _ => () // not a project exception; ignore (factory methods etc.)
                   }
               }
-            case None => ()
+            case Left(error) =>
+              parseFailures += ((file, error))
+              ()
           }
+        }
+
+        // Partition parse failures into tolerated (match an ignoreParseErrors substring) and fatal.
+        val (tolerated, fatal) =
+          parseFailures.toList.partition {
+            case (file, _) =>
+              val normalized = file.getAbsolutePath.replace(File.separatorChar, '/')
+              ignoreParseErrors.exists(pattern => normalized.contains(pattern))
+          }
+
+        tolerated.foreach {
+          case (file, error) =>
+            println(
+              s"check-exception-uniqueness: [info] Skipped unparseable file (tolerated): ${file.getAbsolutePath}: $error"
+            )
+        }
+
+        if (fatal.nonEmpty) {
+          val message = new StringBuilder()
+          message.append(
+            "check-exception-uniqueness: FAIL — could not parse the following Scala source file(s):\n\n"
+          )
+          fatal.foreach {
+            case (file, error) =>
+              message.append(s"  ${file.getAbsolutePath}\n")
+              message.append(s"    $error\n\n")
+          }
+          message.append(
+            "The throw-site scanner parses every Scala source file. Parse errors fail the task by default\n"
+          )
+          message.append(
+            "because a silently skipped file is an evasion path — a throw site inside an unparseable file\n"
+          )
+          message.append("would not be checked.\n\n")
+          message.append("To resolve:\n")
+          message.append("  1. Fix the source file so it parses as Scala 3, OR\n")
+          message.append(
+            "  2. Add a path substring matching the file to the `exceptionUniquenessIgnoreParseErrors` setting\n"
+          )
+          message.append(
+            "     in build.sbt if the file is legitimately unparseable (e.g. a test fixture with intentionally\n"
+          )
+          message.append("     malformed Scala). Example:\n")
+          message.append(
+            "       exceptionUniquenessIgnoreParseErrors := Seq(\"path/to/Broken.scala\")\n"
+          )
+          sys.error(message.toString)
         }
 
         val grouped: Map[String, List[(String, Int)]] =
@@ -161,30 +216,26 @@ object ThrowSiteUniquenessCheck {
   }
 
   /**
-   * Parse a single file with scalameta. On parse failure, log a warning and return `None` so the overall scan can
-   * continue — an individual unparseable file should not fail the build from this check (the Scala compiler will catch
-   * genuine syntax errors separately).
+   * Parse a single file with scalameta using the Scala 3 dialect. Returns `Right(tree)` on success, or `Left(message)`
+   * on any parse or read error. Callers decide whether to fail the task or tolerate the error based on the
+   * `ignoreParseErrors` allowlist.
+   *
+   * The dialect is hardcoded to Scala 3 because all RepCheck projects are Scala 3. Scalameta's default dialect is Scala
+   * 2.x, which silently rejects Scala 3–only syntax such as `enum`, `given`, `extension`, and braceless blocks — that's
+   * exactly the silent-skip bug v0.4.0 fixes.
    */
-  private def parseFile(file: File): Option[Tree] =
+  private def parseFile(file: File): Either[String, Tree] =
     try {
-      val bytes   = Files.readAllBytes(file.toPath)
-      val text    = new String(bytes, StandardCharsets.UTF_8)
-      val input   = Input.VirtualFile(file.getAbsolutePath, text)
-      val dialect = dialects.Scala213Source3
-      dialect(input).parse[Source] match {
-        case Parsed.Success(tree) => Some(tree)
-        case Parsed.Error(_, msg, _) =>
-          println(
-            s"check-exception-uniqueness: WARN — could not parse ${file.getAbsolutePath}: $msg (skipping)"
-          )
-          None
+      val bytes = Files.readAllBytes(file.toPath)
+      val text  = new String(bytes, StandardCharsets.UTF_8)
+      val input = Input.VirtualFile(file.getAbsolutePath, text)
+      dialects.Scala3(input).parse[Source] match {
+        case Parsed.Success(tree)    => Right(tree)
+        case Parsed.Error(_, msg, _) => Left(msg)
       }
     } catch {
       case NonFatal(e) =>
-        println(
-          s"check-exception-uniqueness: WARN — error reading ${file.getAbsolutePath}: ${e.getMessage} (skipping)"
-        )
-        None
+        Left(s"I/O error reading file: ${e.getMessage}")
     }
 
   /**

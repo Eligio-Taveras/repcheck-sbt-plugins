@@ -1,0 +1,4 @@
+# Negative: a file that cannot be parsed must fail the task by default
+# (strict parse-error behavior added in v0.4.0). Before v0.4.0 this would
+# pass because parse errors were logged as warnings and skipped.
+-> checkExceptionUniqueness
