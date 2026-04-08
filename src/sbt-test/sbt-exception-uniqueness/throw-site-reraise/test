@@ -1,0 +1,2 @@
+# Re-raise: `throw e` must not count as a second site.
+> checkExceptionUniqueness

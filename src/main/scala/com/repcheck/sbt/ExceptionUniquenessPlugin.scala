@@ -32,6 +32,7 @@ object ExceptionUniquenessPlugin extends AutoPlugin {
           (Test / classDirectory).value,
           (Test / fullClasspath).value.files,
           exceptionUniquenessRootPackages.value,
+          (Compile / unmanagedSourceDirectories).value ++ (Test / unmanagedSourceDirectories).value,
         )
       }
       .dependsOn(Compile / compile, Test / compile)

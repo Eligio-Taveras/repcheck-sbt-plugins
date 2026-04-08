@@ -1,0 +1,2 @@
+# Positive: a single apply-form throw site (no `new`) should pass.
+> checkExceptionUniqueness

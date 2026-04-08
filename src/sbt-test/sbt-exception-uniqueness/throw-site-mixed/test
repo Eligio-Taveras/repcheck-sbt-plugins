@@ -1,0 +1,3 @@
+# Negative: one `throw new FooException(...)` site and one `throw FooException(...)`
+# apply-form site should be unified and fail the check.
+-> checkExceptionUniqueness
