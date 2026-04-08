@@ -1,0 +1,2 @@
+# Negative: two apply-form throw sites for the same project exception should fail.
+-> checkExceptionUniqueness

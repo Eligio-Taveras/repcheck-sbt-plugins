@@ -16,14 +16,19 @@ import scala.util.control.NonFatal
  * guarantees each exception class has a unique name, this check guarantees each exception class is also instantiated at
  * a unique failure point — so every `throw` in the codebase uniquely identifies the code path that produced it.
  *
- * Scope notes (v0.2.0):
- *   - Only `throw new ClassName(...)` sites count. `Term.Throw(Term.New(...))` in scalameta.
+ * Scope notes (v0.3.0):
+ *   - `throw new ClassName(...)` sites count. `Term.Throw(Term.New(...))` in scalameta.
+ *   - `throw ClassName(...)` (case-class apply form, no `new`) also counts. `Term.Throw(Term.Apply(...))` where the
+ *     applied function reduces to a known project exception simple name. Qualified names (`pkg.ClassName(...)`), type
+ *     arguments (`ClassName[T](...)`), and curried arg lists (`ClassName(x)(y)`) are all handled.
  *   - Re-raises (`throw e`, `throw caught`) are allowed and intentionally ignored — the thrown term must be a
- *     `Term.New` for the site to count.
- *   - The case-class apply form (`throw FooException("msg")` without `new`) is NOT checked. Known gap.
+ *     `Term.New` or a `Term.Apply` resolving to a known project exception for the site to count.
  *   - Only throw sites whose constructed type resolves to a project-declared Throwable simple name (from the
  *     allowlisted root packages) are counted. Non-project exceptions like `throw new IllegalArgumentException(...)` may
  *     appear freely.
+ *   - Known gap: bare case-object throws (`throw FooException` with no args) are not counted. Factory method calls
+ *     (`throw ExceptionFactory.build(...)`) are not counted. Orphan detection (declared-but-never-thrown) is out of
+ *     scope.
  */
 object ThrowSiteUniquenessCheck {
 
@@ -61,6 +66,11 @@ object ThrowSiteUniquenessCheck {
         // (simpleName, filePath, lineNumber)
         val throwSites = new ListBuffer[(String, String, Int)]()
 
+        def record(simpleName: String, file: File, line: Int): Unit = {
+          throwSites += ((simpleName, file.getAbsolutePath, line))
+          ()
+        }
+
         scalaFiles.foreach { file =>
           parseFile(file) match {
             case Some(tree) =>
@@ -69,8 +79,15 @@ object ThrowSiteUniquenessCheck {
                   extractSimpleName(init.tpe).foreach { simpleName =>
                     if (projectExceptionSimpleNames.contains(simpleName)) {
                       val line = t.pos.startLine + 1 // scalameta is 0-indexed
-                      throwSites += ((simpleName, file.getAbsolutePath, line))
+                      record(simpleName, file, line)
                     }
+                  }
+                case t @ Term.Throw(apply: Term.Apply) =>
+                  extractAppliedSimpleName(apply.fun) match {
+                    case Some(simpleName) if projectExceptionSimpleNames.contains(simpleName) =>
+                      val line = t.pos.startLine + 1 // scalameta is 0-indexed
+                      record(simpleName, file, line)
+                    case _ => () // not a project exception; ignore (factory methods etc.)
                   }
               }
             case None => ()
@@ -116,7 +133,7 @@ object ThrowSiteUniquenessCheck {
             "Rename or split the duplicates so each `throw new ...` uniquely identifies its failure point.\n"
           )
           message.append(
-            "(Re-raises like `throw e` are not counted. The case-class apply form `throw Foo(...)` is not checked in v0.2.0.)"
+            "(Re-raises like `throw e` are not counted. Both `throw new Foo(...)` and `throw Foo(...)` apply forms count as sites.)"
           )
           sys.error(message.toString)
         }
@@ -181,6 +198,19 @@ object ThrowSiteUniquenessCheck {
     case Type.Project(_, name) => Some(name.value)
     case applied: Type.Apply   => extractSimpleName(applied.tpe)
     case _                     => None
+  }
+
+  /**
+   * Reduce the function term of a `Term.Apply` to a simple name when possible. Handles bare names, qualified names via
+   * `Term.Select`, type-argument applications via `Term.ApplyType`, and curried arg lists via nested `Term.Apply`.
+   * Returns `None` for anything that cannot be reduced to a simple name (e.g. function-value invocations).
+   */
+  private def extractAppliedSimpleName(fun: Term): Option[String] = fun match {
+    case Term.Name(name)                 => Some(name)
+    case Term.Select(_, Term.Name(name)) => Some(name)
+    case applyType: Term.ApplyType       => extractAppliedSimpleName(applyType.fun)
+    case apply: Term.Apply               => extractAppliedSimpleName(apply.fun)
+    case _                               => None
   }
 
 }
