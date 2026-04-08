@@ -16,7 +16,9 @@ levels:
    source tree. Both `throw new ClassName(...)` and the case-class apply
    form `throw ClassName(...)` (without `new`) count as sites, and are
    unified under a single per-class limit. Implemented via scalameta
-   source parsing.
+   source parsing. Since v0.4.0 the parser uses the Scala 3 dialect
+   (hardcoded — all RepCheck projects are Scala 3) and parse errors fail
+   the task by default.
 
 ### Usage
 
@@ -30,7 +32,7 @@ credentials += Credentials(
   sys.env.getOrElse("GITHUB_USERNAME", ""),
   sys.env.getOrElse("GITHUB_TOKEN", "")
 )
-addSbtPlugin("com.repcheck" % "sbt-exception-uniqueness" % "0.3.0")
+addSbtPlugin("com.repcheck" % "sbt-exception-uniqueness" % "0.4.0")
 ```
 
 In `build.sbt`, enable on each project that should be checked:
@@ -77,6 +79,29 @@ The throw-site scan is deliberately conservative:
   name.
 - **Orphan detection is NOT included.** The scan does not flag declared
   exceptions that are never thrown.
+
+### Scala 3 dialect and parse errors (v0.4.0)
+
+- The scanner parses every Scala source file with **scalameta's Scala 3
+  dialect**. This is hardcoded because all RepCheck projects are Scala 3.
+  Earlier releases (0.3.0 and below) used scalameta's default dialect
+  (Scala 2.x), which silently rejected files containing `enum`, `given`,
+  `extension`, or braceless blocks — throw sites in those files were not
+  scanned. That evasion path is closed in v0.4.0.
+- **Parse errors fail the task by default.** If any Scala source file
+  cannot be parsed, the task fails with a list of `(file, error)` pairs and
+  instructions to either fix the file or allowlist it.
+- **Allowlist for legitimately-unparseable files.** Set
+  `exceptionUniquenessIgnoreParseErrors` to a list of path-substring
+  patterns. Any file whose absolute path contains a matching substring is
+  skipped (with an `[info]` log) instead of failing the task. Use this only
+  for test fixtures or generated files that cannot parse as valid Scala.
+  ```scala
+  exceptionUniquenessIgnoreParseErrors := Seq(
+    "src/test/resources/fixtures/BrokenSample.scala",
+  )
+  ```
+  The default is `Seq.empty`.
 
 ### Dependencies
 

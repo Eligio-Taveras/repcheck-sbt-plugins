@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Use scala.meta Scala3 dialect for source parsing (previously defaulted to
+  Scala 2, causing silent skip of files containing `enum`, `given`,
+  `extension`, or braceless syntax — a throw-site evasion path). All
+  RepCheck projects are Scala 3, so this is hardcoded.
+- Parse errors now FAIL the task by default, listing each (file, error) and
+  instructions on how to resolve (fix the file or add it to the ignore
+  allowlist).
+- New setting `exceptionUniquenessIgnoreParseErrors: Seq[String]` — allowlist
+  of path substrings whose parse errors are tolerated and the file skipped.
+  Empty by default. Use this for test fixtures or generated files that are
+  intentionally unparseable.
+
 ## 0.3.0
 
 - Added throw-site uniqueness check: each project `Throwable` may be thrown

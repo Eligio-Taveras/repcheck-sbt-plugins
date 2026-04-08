@@ -1,0 +1,3 @@
+# Positive: a file whose parse error is explicitly tolerated via the
+# exceptionUniquenessIgnoreParseErrors setting should NOT fail the task.
+> checkExceptionUniqueness
