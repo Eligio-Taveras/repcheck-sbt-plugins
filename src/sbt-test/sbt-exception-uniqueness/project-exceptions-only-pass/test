@@ -1,0 +1,2 @@
+# Positive: only project exceptions raised in production code — should pass.
+> checkExceptionUniqueness

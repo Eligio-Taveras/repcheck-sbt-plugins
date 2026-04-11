@@ -41,6 +41,7 @@ object ExceptionUniquenessCheck {
     fullClasspath: Seq[File],
     projectRootPackages: Seq[String],
     sourceDirectories: Seq[File],
+    productionSourceDirectories: Seq[File],
     ignoreParseErrors: Seq[String] = Seq.empty,
   ): Unit = {
     val declaredSimpleNames =
@@ -51,7 +52,13 @@ object ExceptionUniquenessCheck {
       projectRootPackages,
       ignoreParseErrors,
     )
-    println("check-exception-uniqueness: declarations OK, throw sites OK.")
+    ProjectExceptionsOnlyCheck.run(
+      productionSourceDirectories,
+      declaredSimpleNames,
+      projectRootPackages,
+      ignoreParseErrors,
+    )
+    println("check-exception-uniqueness: declarations OK, throw sites OK, project-exceptions-only OK.")
   }
 
   /**
