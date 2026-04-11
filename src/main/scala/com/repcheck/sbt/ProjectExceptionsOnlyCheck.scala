@@ -9,8 +9,8 @@ import scala.meta._
 import scala.util.control.NonFatal
 
 /**
- * Enforces the RepCheck "only project exceptions" rule: all exceptions constructed and raised in production code must be
- * custom project-declared Throwable subclasses, never standard Java/Scala exceptions like `RuntimeException`,
+ * Enforces the RepCheck "only project exceptions" rule: all exceptions constructed and raised in production code must
+ * be custom project-declared Throwable subclasses, never standard Java/Scala exceptions like `RuntimeException`,
  * `IOException`, `IllegalArgumentException`, etc.
  *
  * This check scans ONLY production (non-test) source directories. Test code is excluded because tests legitimately
