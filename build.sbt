@@ -1,5 +1,5 @@
 ThisBuild / organization := "com.repcheck"
-ThisBuild / version      := "0.4.0"
+ThisBuild / version      := "0.5.0"
 ThisBuild / scalaVersion := "2.12.19" // sbt 1.x plugins MUST be Scala 2.12
 
 ThisBuild / semanticdbEnabled := true

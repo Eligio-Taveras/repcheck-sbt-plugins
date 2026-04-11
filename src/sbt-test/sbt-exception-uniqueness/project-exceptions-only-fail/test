@@ -1,0 +1,2 @@
+# Negative: standard exception (RuntimeException) in production code — should fail.
+-> checkExceptionUniqueness
